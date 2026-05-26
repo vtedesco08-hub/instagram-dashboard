@@ -1,14 +1,19 @@
 const https = require('https');
 
+function getHost() {
+  return (process.env.SUPABASE_URL || '').replace(/^https?:\/\//, '').split('/')[0];
+}
+
 function supabaseReq(method, path, body, bearerToken, useServiceRole = false) {
   return new Promise((resolve, reject) => {
-    const base = new URL(process.env.SUPABASE_URL);
+    const hostname = getHost();
     const apiKey = useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY : process.env.SUPABASE_ANON_KEY;
     const auth = useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY : bearerToken;
     const bodyStr = body ? JSON.stringify(body) : null;
 
     const opts = {
-      hostname: base.hostname,
+      hostname,
+      port: 443,
       path,
       method,
       headers: {
@@ -37,7 +42,7 @@ function readBody(req) {
   return new Promise(resolve => {
     let b = '';
     req.on('data', c => b += c);
-    req.on('end', () => resolve(b ? JSON.parse(b) : {}));
+    req.on('end', () => { try { resolve(JSON.parse(b)); } catch { resolve({}); } });
   });
 }
 
@@ -49,97 +54,94 @@ module.exports = async (req, res) => {
 
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    res.writeHead(500); res.end(JSON.stringify({ error: 'Service role não configurada' })); return;
+  const host = getHost();
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!host || !svcKey) {
+    res.writeHead(500);
+    res.end(JSON.stringify({ error: 'Variaveis de ambiente faltando', hasUrl: !!process.env.SUPABASE_URL, hasSvcKey: !!svcKey }));
+    return;
   }
 
-  // Verify caller token
   const userToken = (req.headers.authorization || '').replace('Bearer ', '');
-  if (!userToken) { res.writeHead(401); res.end(JSON.stringify({ error: 'Não autenticado' })); return; }
+  if (!userToken) { res.writeHead(401); res.end(JSON.stringify({ error: 'Nao autenticado' })); return; }
 
-  const userRes = await supabaseReq('GET', '/auth/v1/user', null, userToken, false);
-  if (!userRes.data?.id) { res.writeHead(401); res.end(JSON.stringify({ error: 'Token inválido' })); return; }
+  try {
+    const userRes = await supabaseReq('GET', '/auth/v1/user', null, userToken, false);
+    if (!userRes.data?.id) { res.writeHead(401); res.end(JSON.stringify({ error: 'Token invalido' })); return; }
 
-  const callerId = userRes.data.id;
-  const profileRes = await supabaseReq('GET', `/rest/v1/user_profiles?id=eq.${callerId}&select=role`, null, null, true);
-  if (!Array.isArray(profileRes.data) || profileRes.data[0]?.role !== 'admin') {
-    res.writeHead(403); res.end(JSON.stringify({ error: 'Acesso negado' })); return;
+    const callerId = userRes.data.id;
+    const profileRes = await supabaseReq('GET', `/rest/v1/user_profiles?id=eq.${callerId}&select=role`, null, null, true);
+    if (!Array.isArray(profileRes.data) || profileRes.data[0]?.role !== 'admin') {
+      res.writeHead(403); res.end(JSON.stringify({ error: 'Acesso negado' })); return;
+    }
+  } catch (err) {
+    res.writeHead(500); res.end(JSON.stringify({ error: err.message })); return;
   }
 
-  // GET — list users, profiles, links and accounts
   if (req.method === 'GET') {
-    const [usersRes, profilesRes, linksRes, accountsRes] = await Promise.all([
-      supabaseReq('GET', '/auth/v1/admin/users?per_page=200', null, null, true),
-      supabaseReq('GET', '/rest/v1/user_profiles?select=*', null, null, true),
-      supabaseReq('GET', '/rest/v1/user_accounts?select=*', null, null, true),
-      supabaseReq('GET', '/rest/v1/accounts?select=id,label,username', null, null, true),
-    ]);
+    try {
+      const [usersRes, profilesRes, linksRes, accountsRes] = await Promise.all([
+        supabaseReq('GET', '/auth/v1/admin/users?per_page=200', null, null, true),
+        supabaseReq('GET', '/rest/v1/user_profiles?select=*', null, null, true),
+        supabaseReq('GET', '/rest/v1/user_accounts?select=*', null, null, true),
+        supabaseReq('GET', '/rest/v1/accounts?select=id,label,username', null, null, true),
+      ]);
 
-    const users = (usersRes.data?.users || []).map(u => ({
-      id: u.id,
-      email: u.email,
-      role: profilesRes.data?.find(p => p.id === u.id)?.role || 'influencer',
-      name: profilesRes.data?.find(p => p.id === u.id)?.name || '',
-      accounts: linksRes.data?.filter(l => l.user_id === u.id).map(l => l.account_id) || [],
-    }));
+      const users = (usersRes.data?.users || []).map(u => ({
+        id: u.id,
+        email: u.email,
+        role: profilesRes.data?.find(p => p.id === u.id)?.role || 'influencer',
+        name: profilesRes.data?.find(p => p.id === u.id)?.name || '',
+        accounts: linksRes.data?.filter(l => l.user_id === u.id).map(l => l.account_id) || [],
+      }));
 
-    res.writeHead(200);
-    res.end(JSON.stringify({ users, accounts: accountsRes.data || [] }));
+      res.writeHead(200);
+      res.end(JSON.stringify({ users, accounts: accountsRes.data || [] }));
+    } catch (err) {
+      res.writeHead(500); res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
   const body = await readBody(req);
 
-  // POST — create user
   if (req.method === 'POST') {
-    const { email, password, name, role, accountIds = [] } = body;
+    try {
+      const { email, password, name, role, accountIds = [] } = body;
+      const created = await supabaseReq('POST', '/auth/v1/admin/users', { email, password, email_confirm: true }, null, true);
+      if (!created.data?.id) { res.writeHead(400); res.end(JSON.stringify({ error: created.data?.msg || 'Erro ao criar usuario' })); return; }
 
-    const created = await supabaseReq('POST', '/auth/v1/admin/users', {
-      email, password, email_confirm: true,
-    }, null, true);
+      const userId = created.data.id;
+      const ops = [supabaseReq('POST', '/rest/v1/user_profiles', { id: userId, role: role || 'influencer', name: name || '' }, null, true)];
+      if (accountIds.length) ops.push(supabaseReq('POST', '/rest/v1/user_accounts', accountIds.map(aid => ({ user_id: userId, account_id: aid })), null, true));
+      await Promise.all(ops);
 
-    if (!created.data?.id) {
-      res.writeHead(400);
-      res.end(JSON.stringify({ error: created.data?.msg || 'Erro ao criar usuário' }));
-      return;
-    }
-
-    const userId = created.data.id;
-    const ops = [
-      supabaseReq('POST', '/rest/v1/user_profiles', { id: userId, role: role || 'influencer', name: name || '' }, null, true),
-    ];
-    if (accountIds.length) {
-      ops.push(supabaseReq('POST', '/rest/v1/user_accounts', accountIds.map(aid => ({ user_id: userId, account_id: aid })), null, true));
-    }
-    await Promise.all(ops);
-
-    res.writeHead(200); res.end(JSON.stringify({ ok: true, id: userId }));
+      res.writeHead(200); res.end(JSON.stringify({ ok: true, id: userId }));
+    } catch (err) { res.writeHead(500); res.end(JSON.stringify({ error: err.message })); }
     return;
   }
 
-  // PUT — update accounts linked to a user
   if (req.method === 'PUT') {
-    const { userId, accountIds = [] } = body;
-
-    await supabaseReq('DELETE', `/rest/v1/user_accounts?user_id=eq.${userId}`, null, null, true);
-    if (accountIds.length) {
-      await supabaseReq('POST', '/rest/v1/user_accounts', accountIds.map(aid => ({ user_id: userId, account_id: aid })), null, true);
-    }
-
-    res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+    try {
+      const { userId, accountIds = [] } = body;
+      await supabaseReq('DELETE', `/rest/v1/user_accounts?user_id=eq.${userId}`, null, null, true);
+      if (accountIds.length) await supabaseReq('POST', '/rest/v1/user_accounts', accountIds.map(aid => ({ user_id: userId, account_id: aid })), null, true);
+      res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+    } catch (err) { res.writeHead(500); res.end(JSON.stringify({ error: err.message })); }
     return;
   }
 
-  // DELETE — remove user entirely
   if (req.method === 'DELETE') {
-    const { userId } = body;
-    await Promise.all([
-      supabaseReq('DELETE', `/rest/v1/user_accounts?user_id=eq.${userId}`, null, null, true),
-      supabaseReq('DELETE', `/rest/v1/user_profiles?id=eq.${userId}`, null, null, true),
-    ]);
-    await supabaseReq('DELETE', `/auth/v1/admin/users/${userId}`, null, null, true);
-
-    res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+    try {
+      const { userId } = body;
+      await Promise.all([
+        supabaseReq('DELETE', `/rest/v1/user_accounts?user_id=eq.${userId}`, null, null, true),
+        supabaseReq('DELETE', `/rest/v1/user_profiles?id=eq.${userId}`, null, null, true),
+      ]);
+      await supabaseReq('DELETE', `/auth/v1/admin/users/${userId}`, null, null, true);
+      res.writeHead(200); res.end(JSON.stringify({ ok: true }));
+    } catch (err) { res.writeHead(500); res.end(JSON.stringify({ error: err.message })); }
     return;
   }
 
