@@ -14,7 +14,9 @@ export async function initSupabase() {
     }
 
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    _supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
+    const cleanUrl = config.supabaseUrl.replace(/[\s﻿​]/g, '');
+    const cleanKey = config.supabaseAnonKey.replace(/[\s﻿​]/g, '');
+    _supabase = createClient(cleanUrl, cleanKey);
     _ready = true;
     return _supabase;
   } catch {
