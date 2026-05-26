@@ -104,8 +104,10 @@ async function init() {
   await initSupabase();
 
   if (!isCloudEnabled()) {
-    // Supabase not configured — go straight to old wizard
-    window.location.href = '/index.html';
+    renderCard(`<p style="text-align:center;color:var(--negative);line-height:1.6">
+      Supabase não conectou.<br>
+      <span style="font-size:13px;color:var(--text-secondary)">Verifique se SUPABASE_URL e SUPABASE_ANON_KEY estão configuradas na Vercel.</span>
+    </p>`);
     return;
   }
 
@@ -114,10 +116,10 @@ async function init() {
 
   try {
     const r = await fetch('/api/admin-setup');
-    const { hasAdmin } = await r.json();
-    hasAdmin ? showLogin() : showSetup();
+    const json = await r.json();
+    json.hasAdmin ? showLogin() : showSetup();
   } catch {
-    showLogin();
+    showSetup();
   }
 }
 

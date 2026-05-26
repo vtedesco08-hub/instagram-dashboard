@@ -13,7 +13,7 @@ export async function initSupabase() {
       return null;
     }
 
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
     _supabase = createClient(config.supabaseUrl, config.supabaseAnonKey);
     _ready = true;
     return _supabase;
