@@ -1,15 +1,17 @@
 const https = require('https');
 
+function env(name) { return (process.env[name] || '').trim(); }
+
 function getHost() {
-  return (process.env.SUPABASE_URL || '').replace(/^https?:\/\//, '').split('/')[0];
+  return env('SUPABASE_URL').replace(/^https?:\/\//, '').split('/')[0];
 }
 
 function supabaseReq(method, path, body, useServiceRole = true) {
   return new Promise((resolve, reject) => {
     const hostname = getHost();
     const key = useServiceRole
-      ? process.env.SUPABASE_SERVICE_ROLE_KEY
-      : process.env.SUPABASE_ANON_KEY;
+      ? env('SUPABASE_SERVICE_ROLE_KEY')
+      : env('SUPABASE_ANON_KEY');
     const bodyStr = body ? JSON.stringify(body) : null;
 
     const opts = {
@@ -52,7 +54,7 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const host = getHost();
-  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const svcKey = env('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!host || !svcKey) {
     res.writeHead(500);

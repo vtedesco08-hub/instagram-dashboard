@@ -1,14 +1,16 @@
 const https = require('https');
 
+function env(name) { return (process.env[name] || '').trim(); }
+
 function getHost() {
-  return (process.env.SUPABASE_URL || '').replace(/^https?:\/\//, '').split('/')[0];
+  return env('SUPABASE_URL').replace(/^https?:\/\//, '').split('/')[0];
 }
 
 function supabaseReq(method, path, body, bearerToken, useServiceRole = false) {
   return new Promise((resolve, reject) => {
     const hostname = getHost();
-    const apiKey = useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY : process.env.SUPABASE_ANON_KEY;
-    const auth = useServiceRole ? process.env.SUPABASE_SERVICE_ROLE_KEY : bearerToken;
+    const apiKey = useServiceRole ? env('SUPABASE_SERVICE_ROLE_KEY') : env('SUPABASE_ANON_KEY');
+    const auth = useServiceRole ? env('SUPABASE_SERVICE_ROLE_KEY') : bearerToken;
     const bodyStr = body ? JSON.stringify(body) : null;
 
     const opts = {
@@ -55,7 +57,7 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
   const host = getHost();
-  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const svcKey = env('SUPABASE_SERVICE_ROLE_KEY');
 
   if (!host || !svcKey) {
     res.writeHead(500);
