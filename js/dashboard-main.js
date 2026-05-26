@@ -1,5 +1,6 @@
 import { isConfigured, loadServerConfig, getCache, saveCache, getLastUpdated, clearAll, getTokenDaysRemaining, getAccounts, getActiveAccountId, setActiveAccount, removeAccount, removeStaleAccounts, syncFromCloud } from './storage.js';
-import { initSupabase } from './supabase-client.js';
+import { initSupabase, isCloudEnabled } from './supabase-client.js';
+import { getSession, getMyProfile, signOut } from './auth.js';
 import { fetchAllMetrics } from './metrics.js';
 import { renderHeader, renderDashboard, initEvolutionCharts } from './ui.js';
 import { saveSnapshot, pruneOldSnapshots, getSnapshotsByAccount, getPreviousSnapshot, computeDeltas } from './history-store.js';
@@ -397,10 +398,31 @@ async function loadDashboard(forceRefresh = false, days = currentDays) {
 
 loadServerConfig().then(async () => {
   await initSupabase();
+
+  if (isCloudEnabled()) {
+    const session = await getSession();
+    if (!session) { window.location.href = '/login.html'; return; }
+
+    // Add logout button to header after render
+    const profile = await getMyProfile();
+    if (profile?.role === 'admin') {
+      document.addEventListener('dashboard:rendered', () => {
+        const hdr = document.getElementById('header');
+        if (!hdr) return;
+        const adminLink = document.createElement('a');
+        adminLink.href = '/admin.html';
+        adminLink.className = 'btn btn-sm';
+        adminLink.style.cssText = 'margin-left:8px;font-size:12px;';
+        adminLink.textContent = 'Admin';
+        hdr.appendChild(adminLink);
+      });
+    }
+  }
+
   await syncFromCloud();
   removeStaleAccounts();
   if (!isConfigured()) {
-    window.location.href = 'index.html';
+    window.location.href = isCloudEnabled() ? 'index.html' : 'index.html';
   } else {
     loadDashboard(false);
   }

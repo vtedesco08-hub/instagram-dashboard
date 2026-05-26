@@ -118,6 +118,18 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.url.startsWith('/api/admin-setup')) {
+    const adminSetup = require('./api/admin-setup');
+    adminSetup(req, res);
+    return;
+  }
+
+  if (req.url.startsWith('/api/admin-users')) {
+    const adminUsers = require('./api/admin-users');
+    adminUsers(req, res);
+    return;
+  }
+
   if (req.url.startsWith('/api/')) {
     proxyToGraph(req, res);
     return;

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Instagram Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <meta name="theme-color" content="#741E31">
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <div class="admin-layout">
+    <aside class="admin-sidebar">
+      <div class="admin-logo">
+        <span style="font-family:var(--font-display);font-size:18px;">Dashboard</span>
+        <span style="font-size:11px;color:var(--text-secondary);display:block;">Painel Administrativo</span>
+      </div>
+      <nav class="admin-nav">
+        <a href="/dashboard.html" class="admin-nav-item">← Voltar ao Dashboard</a>
+        <a href="#usuarios" class="admin-nav-item active" id="tabUsuarios">Usuários</a>
+        <a href="#contas" class="admin-nav-item" id="tabContas">Contas Instagram</a>
+      </nav>
+      <button class="admin-nav-item" id="btnLogout" style="margin-top:auto;background:none;border:none;cursor:pointer;text-align:left;color:var(--negative);">Sair</button>
+    </aside>
+
+    <main class="admin-main" id="adminMain">
+      <div class="loading"><div class="spinner"></div><p>Carregando...</p></div>
+    </main>
+  </div>
+
+  <div class="admin-modal-overlay" id="modalOverlay" style="display:none;">
+    <div class="admin-modal" id="modal"></div>
+  </div>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

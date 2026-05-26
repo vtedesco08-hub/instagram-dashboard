@@ -1,13 +1,23 @@
 import { isConfigured, loadServerConfig, saveAccount, getAccounts, syncFromCloud } from './storage.js';
 import { validateToken } from './api.js';
-import { initSupabase } from './supabase-client.js';
+import { initSupabase, isCloudEnabled } from './supabase-client.js';
+import { getSession, getMyProfile } from './auth.js';
 
 const isAddMode = new URLSearchParams(location.search).get('add') === '1';
 
 loadServerConfig().then(async () => {
   await initSupabase();
+
+  if (isCloudEnabled()) {
+    const session = await getSession();
+    if (!session) { window.location.href = '/login.html'; return; }
+    const profile = await getMyProfile();
+    if (profile?.role !== 'admin') { window.location.href = '/dashboard.html'; return; }
+  }
+
   await syncFromCloud();
-  if (!isAddMode && isConfigured()) window.location.href = 'dashboard.html';
+  if (!isAddMode && isConfigured()) { window.location.href = 'dashboard.html'; return; }
+  render();
 });
 
 const STEPS = [
@@ -183,5 +193,3 @@ async function handleConnect() {
     }
   }
 }
-
-render();
