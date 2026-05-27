@@ -14,8 +14,10 @@ export async function initSupabase() {
     }
 
     const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-    const cleanUrl = config.supabaseUrl.replace(/[\s﻿​]/g, '');
-    const cleanKey = config.supabaseAnonKey.replace(/[\s﻿​]/g, '');
+    // Strip BOM (﻿), zero-width spaces, and any non-printable-ASCII that would break fetch headers
+    const clean = s => (s || '').replace(/[^\x20-\x7E]/g, '').trim();
+    const cleanUrl = clean(config.supabaseUrl);
+    const cleanKey = clean(config.supabaseAnonKey);
     _supabase = createClient(cleanUrl, cleanKey);
     _ready = true;
     return _supabase;
